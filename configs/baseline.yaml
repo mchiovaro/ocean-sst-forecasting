@@ -1,0 +1,11 @@
+data:
+  train_file: data/train.npz
+  validation_file: data/validation.npz
+
+model:
+  type: persistence
+
+output_dir: outputs/baseline
+batch_size: 64
+device: cpu
+seed: 444

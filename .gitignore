@@ -1,0 +1,42 @@
+# Downloaded and generated data
+data/*
+!data/README.txt
+!data/.gitkeep
+oisst_cache/
+packaged_data/
+
+# Kaggle competition files
+kaggle_host_files/
+submission/prepare_kaggle_host_files.py
+
+
+# Model outputs and submissions
+outputs/
+submissions/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Large data formats
+*.nc
+*.npz
+*.npy
+
+# Python environments
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

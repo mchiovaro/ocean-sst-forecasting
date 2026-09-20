@@ -1,0 +1,14 @@
+data:
+  train_file: data/train.npz
+  validation_file: data/validation.npz
+model:
+  type: small_cnn
+  hidden_channels: 32
+output_dir: outputs/small_cnn
+batch_size: 64
+epochs: 10
+learning_rate: 0.001
+weight_decay: 0.00001
+num_workers: 0
+device: auto
+seed: 444
