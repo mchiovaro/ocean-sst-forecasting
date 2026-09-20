@@ -8,6 +8,12 @@ import numpy as np
 
 
 def main() -> None:
+    """Convert --predictions NPZ maps into an Id,sst_c CSV at --output.
+
+    Maps must have shape (samples, 3, latitude rows, longitude columns).
+    Write one row per cell, including land, in sample/day/row/column order.
+    This only reshapes the output; it does not run or score a model.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--predictions", required=True)
     parser.add_argument("--output", required=True)
@@ -19,7 +25,9 @@ def main() -> None:
 
     expected = (len(dates), 3, len(lat), len(lon))
     if predictions.shape != expected:
-        raise ValueError(f"Expected predictions with shape {expected}; got {predictions.shape}")
+        raise ValueError(
+            f"Expected predictions with shape {expected}; got {predictions.shape}"
+        )
     if not np.isfinite(predictions).all():
         raise ValueError("Predictions contain NaN or infinite values")
 
@@ -28,6 +36,8 @@ def main() -> None:
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(["Id", "sst_c"])
+        # IDs use original array indices, not dates or coordinate values.
+        # Include land rows too: masking belongs to scoring, not CSV filtering.
         for i in range(len(dates)):
             for lead in range(3):
                 for row in range(len(lat)):

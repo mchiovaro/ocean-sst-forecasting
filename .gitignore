@@ -8,7 +8,7 @@ packaged_data/
 # Kaggle competition files
 kaggle_host_files/
 submission/prepare_kaggle_host_files.py
-
+tests/test_work
 
 # Model outputs and submissions
 outputs/
