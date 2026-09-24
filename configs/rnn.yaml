@@ -1,14 +1,16 @@
 data:
   train_file: data/train.npz
   validation_file: data/validation.npz
+
 model:
-  type: small_cnn
-  hidden_channels: 32
-output_dir: outputs/small_cnn
+  type: rnn
+  hidden_channels: 32 # build_model uses this as the RNN's hidden_size
+
+output_dir: outputs/rnn
 batch_size: 64 # samples per batch; the 14 days stay in order
 epochs: 10 # passes through the training samples
 learning_rate: 0.001 # starting step size for Adam updates
-weight_decay: 0.00001
-num_workers: 0
-device: auto
+weight_decay: 0.00001 # small penalty on large weights, same as the CNN config
+num_workers: 0 # load batches in the main process for now
+device: auto # CUDA if available, otherwise CPU
 seed: 444 # repeat the random starting point in this environment
