@@ -6,6 +6,6 @@ model:
   type: persistence
 
 output_dir: outputs/baseline
-batch_size: 64
+batch_size: 64 # samples per batch; the 14 days stay in order
 device: cpu
-seed: 444
+seed: 444 # repeat the random starting point in this environment
