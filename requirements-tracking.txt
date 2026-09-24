@@ -1,0 +1,3 @@
+# Optional local experiment tracking; keep the base model dependencies pinned.
+-r requirements.txt
+mlflow==3.16.1
