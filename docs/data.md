@@ -19,11 +19,11 @@ Here, `N` is the number of samples, `H` is the number of latitude rows, and `W` 
 
 | File | Samples | Use |
 | --- | ---: | --- |
-| `train.npz` | 8,764 | Fit the CNN and calculate its input normalization |
+| `train.npz` | 8,764 | Fit the learned models and calculate input normalization |
 | `validation.npz` | 728 | Compare predictions with known answers and choose the best checkpoint |
 | `test_inputs.npz` | 729 | Make submission predictions; this file has no `y` |
 
-The data-generation code is not included here, so the exact meaning of `dates` still needs confirming: it could label an input-window boundary or a forecast day. The current code carries these labels through to the prediction file; it does not use them to calculate temperatures or submission IDs.
+The data-generation code is not included here, so I still need to confirm exactly what `dates` labels: it could label an input-window boundary or a forecast day. The current code carries these labels through to the prediction file; it does not use them to calculate temperatures or submission IDs.
 
 ## Reading the array indices
 
@@ -47,9 +47,9 @@ last_ocean_values = last_map[mask]  # just the cells included in scoring
 
 ## Masks and normalization
 
-The mask is shared by every sample and day. The CNN still receives the whole rectangular grid, but its loss and validation score use only ocean cells. All stored temperatures, including excluded cells, must be finite because the model reads the full maps.
+The mask is shared by every sample and day. Each learned model still receives the whole rectangular grid, but its loss and validation score use only ocean cells. All stored temperatures, including excluded cells, must be finite because the model reads the full maps.
 
-Normalization means subtracting the training input mean and dividing by the training input standard deviation. Both numbers come from training ocean cells only. The CNN uses those same numbers for validation and test predictions, then converts its correction back to Celsius. Validation and test data do not get their own normalization statistics.
+Normalization means subtracting the training input mean and dividing by the training input standard deviation. Both numbers come from training ocean cells only. Each learned model uses those same numbers for validation and test predictions, then converts its correction back to Celsius. Validation and test data do not get their own normalization statistics.
 
 `SSTDataset` loads arrays as PyTorch tensors when samples are requested. A tensor is the array type PyTorch uses for model calculations. `dataset[0]` returns `(x, y)` when targets are present, or just `x` when they are missing. `require_targets=False` allows missing targets; it does not remove targets from a labeled file.
 

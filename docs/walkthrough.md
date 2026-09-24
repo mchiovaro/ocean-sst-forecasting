@@ -30,7 +30,7 @@ Despite the command name, persistence does not train anything. For one sample, i
 python -m src.train --config configs/small_cnn.yaml
 ```
 
-The CNN (convolutional neural network) looks at nearby grid cells to learn spatial patterns. It treats the 14 input days as 14 channels, or layers of the input, and produces three correction maps. It uses all 14 days at once rather than stepping through them one at a time.
+The CNN (convolutional neural network) looks at nearby grid cells to learn spatial patterns. It treats the 14 input days as 14 channels, or stacked input maps, and produces three correction maps. It uses all 14 days at once rather than stepping through them one at a time.
 
 For each sample, the calculation is:
 
@@ -45,6 +45,7 @@ The run writes these files under `outputs/small_cnn/`:
 
 | File | What I use it for |
 | --- | --- |
+| `config.yaml` | Settings loaded for this run |
 | `history.json` | Training and validation scores for each epoch |
 | `metrics.json` | Best validation score, normalization statistics, and checkpoint path |
 | `best_model.pt` | Saved model weights, architecture settings, and normalization needed for prediction |
@@ -52,6 +53,27 @@ The run writes these files under `outputs/small_cnn/`:
 A checkpoint is a saved model snapshot. This one is kept whenever validation improves, so it may come from an earlier epoch than the last one. It supports prediction; it does not save the optimizer state needed to resume the exact training run.
 
 Reusing the same output directory overwrites results. For a separate experiment, copy the config and give it a different `output_dir` so the scores and model stay together.
+
+## Where the RNN and LSTM fit
+
+Both use the same training function as the CNN. The RNN reads one flattened map
+at a time and updates its hidden state, a learned summary of the sequence.
+The LSTM also has a cell state, with learned gates that control what information
+is kept or changed. Neither state is carried from one sample to the next.
+
+Both turn the final hidden state into three correction maps and add them to the
+last observed map. Flattening keeps the temperature values and their order, but
+does not explicitly show the model which cells are neighbors. The builders use
+our fixed 12 × 14 grid.
+
+```bash
+python -m src.train --config configs/rnn.yaml
+python -m src.train --config configs/lstm.yaml
+```
+
+The same checkpoint and prediction steps apply to these models. Add `--track`
+to training for a separate MLflow run folder. [Tracking notes](experiments.md)
+explain that part; [tuning notes](tuning.md) cover trying settings with Optuna.
 
 ## Reading the scores
 
@@ -61,7 +83,7 @@ For example, daily RMSEs of 0.2, 0.3, and 0.4 °C give a reported validation sco
 
 Training minimizes MSE (mean squared error) across all three days together. The logged training RMSE takes one square root of that pooled error. It also combines batches seen while the weights were changing. That makes it different from the validation score, which checks one fixed model and averages the three daily RMSEs.
 
-Use validation scores to compare models. Finishing a run tells me the code worked; beating persistence tells me the model added something. Repeatedly choosing settings using validation also means that set is part of model development, so it is useful to keep the test set separate.
+Use validation scores to compare models. Finishing a run tells me the code worked; beating persistence tells me the model did better on this validation set. Repeatedly choosing settings using validation also means that set is part of model development, so it is useful to keep the test set separate.
 
 ## Make predictions, then a submission
 
@@ -84,10 +106,10 @@ python submission/make_submission.py \
   --output outputs/small_cnn_submission.csv
 ```
 
-Training a CNN does not change the prediction command's default: without `--checkpoint`, it still uses persistence. With a checkpoint, it loads that model's settings, normalization, and weights. Prediction preserves sample order and does not need targets.
+Training a learned model does not change the prediction command's default: without `--checkpoint`, it still uses persistence. With a checkpoint, it loads that model's settings, normalization, and weights. Prediction preserves sample order and does not need targets.
 
 The `.npz` keeps maps in their original array shape, which is useful for analysis or plotting. The CSV lists one temperature per row for submission. The conversion script does not run a model or change its predictions. See [data notes](data.md) for fields, shapes, and row IDs.
 
 The commands use the configured output paths relative to the working directory. Downloaded data and generated outputs are excluded from Git by `.gitignore`; code, configs, and these notes belong in the repo.
 
-[Back to the README](../README.md)
+[Comparing models](comparing-models.md) · [Back to the README](../README.md)
