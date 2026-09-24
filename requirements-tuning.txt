@@ -1,0 +1,3 @@
+# Optuna plus optional MLflow support, keeping the base dependencies pinned.
+-r requirements-tracking.txt
+optuna==4.9.0
