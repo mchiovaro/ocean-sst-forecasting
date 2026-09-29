@@ -20,6 +20,8 @@ For readers outside the course: the prepared `.npz` files are **not in this repo
 
 Each example is a sliding window: observed days 1–14 become the input, and observed days 15–17 are the target. Every map has the same latitude–longitude grid. The prepared region spans **23.5–26.5°N, 83.0–79.5°W**, covering the Florida Keys and nearby Gulf and Atlantic waters. SST is measured in degrees Celsius. The stored coordinates are cell centers: 23.625–26.375°N and 277.125–280.375°E (82.875–79.625°W). Longitudes in the files use the 0–360° convention.
 
+![Competition region showing South Florida, the Florida Keys, and the 12 by 14 data grid](assets/competition-data-region-map.png)
+
 | Item | Shape or definition |
 | --- | --- |
 | Inputs `X` | `(examples, 14, latitude, longitude)` |
