@@ -139,7 +139,6 @@ Open http://127.0.0.1:5001 and select **ocean-sst**. [Experiment tracking notes]
 - `src/train.py`: baseline evaluation and learned-model training
 - `src/predict.py`: persistence or checkpoint-based test predictions
 - `src/tracking.py`: optional MLflow run records
-- `src/tune.py`: Optuna search over learning rate and hidden size
 - `configs/`: experiment settings
 - `notebooks/competition_quickstart.ipynb`: Colab setup path
 - `submission/make_submission.py`: prediction-to-CSV conversion
@@ -147,7 +146,7 @@ Open http://127.0.0.1:5001 and select **ocean-sst**. [Experiment tracking notes]
 - `tests/`: small checks for loading, scoring, models, and the submission workflow
 - `docs/`: data and workflow notes
 
-## Automatic tuning with Optuna
+## Automatic tuning with Optuna (forthcoming lesson; ignore for now, 09/29)
 
 Optuna tries learning rates and hidden sizes using the same training loop. Start with a small search:
 
