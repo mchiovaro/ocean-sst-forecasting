@@ -1,51 +1,52 @@
 # Ocean SST Forecasting
 
-Predict the next 3 daily sea-surface temperature (SST) maps from the previous 14 maps. The prepared data cover a fixed box around the Florida Keys and store SST in degrees Celsius.
+**A teaching repository for EGR 444 at the University of Rhode Island.** Given 14 daily sea-surface temperature (SST) maps around the Florida Keys, students are tasked to predict the next 3 maps using a host of models (spatial, temporal, and spatio-temporal). The project uses a fixed forecasting task to compare what different model families learn from space, time, and their combination.
 
-I start with persistence, then compare a small CNN, RNN, and LSTM. The point is to see what each model adds. A more complicated model is not automatically better.
+![Schematic showing 14 observed SST maps feeding a model that predicts three maps](assets/forecast-window.svg)
+
+The timeline above is a schematic of the input and output shapes, not measured SST maps. The actual competition grid and Florida coastline are shown in the [region graphic below](#forecasting-task-and-evaluation).
+
+## Why this repository exists
+
+This is my **reference implementation** for the course competition, released in stages. Each week, students will be taught a model family, implement and test their own approach, and submit predictions to [Kaggle](https://www.kaggle.com/competitions/egr444-ocean-forecasting-competition). (Note: The Kaggle competition is currently set to private, but will be opened up to the public at the conclusion of the semester.)
+
+**After each week's submission checkpoint**, I publish a deliberately small implementation showing how I approached the task. Students can then compare design choices, inspect the training workflow, and decide what to try next. The reference code is a learning aid, not a *required* architecture.
+
+Currently, the progression starts with persistence, then a small CNN, a plain RNN, and an LSTM. The lesson is an experimental one: a more complex model is not automatically a better forecast. In particular, a CNN can use local spatial structure but treats input days as channels here; the RNN and LSTM process days in order but flatten each map, so neighboring grid cells are not explicitly represented as neighbors. That tradeoff motivates later models that represent space and time together. The repository also demonstrates reproducible configurations, a fixed validation metric, saved checkpoints, and optional experiment tracking.
+
+For readers outside the course: the prepared `.npz` files are **not in this repository**. If you would like to follow the same exercise, [contact me through my GitHub profile (@mchiovaro)](https://github.com/mchiovaro) or my university email, **mchiovaro@uri.edu** to request the prepared data. The underlying source is [NOAA OISST v2.1](https://www.ncei.noaa.gov/products/optimum-interpolation-sst) ([dataset DOI](https://doi.org/10.25921/RE9P-PT57)).
+
+## Forecasting task and evaluation
+
+Each example is a sliding window: observed days 1–14 become the input, and observed days 15–17 are the target. Every map has the same latitude–longitude grid. The prepared region spans **23.5–26.5°N, 83.0–79.5°W**, covering the Florida Keys and nearby Gulf and Atlantic waters. SST is measured in degrees Celsius. The stored coordinates are cell centers: 23.625–26.375°N and 277.125–280.375°E (82.875–79.625°W). Longitudes in the files use the 0–360° convention.
+
+| Item | Shape or definition |
+| --- | --- |
+| Inputs `X` | `(examples, 14, latitude, longitude)` |
+| Targets `y` | `(examples, 3, latitude, longitude)` |
+| `mask` | Grid cells counted as ocean for scoring |
+| Persistence baseline | Repeat day 14 for forecast days +1, +2, and +3 |
+| Score | RMSE over all examples and scored ocean cells for each lead day, then the mean of the three RMSE values; lower is better |
+
+The stored example dates are grouped chronologically: **1998–2021** for training, **2022–2023** for validation, and **2024–2025** for test. The data-preparation code is not included, so these labels alone do not verify which day of each window `dates` represents or the exact target boundaries. Inputs can legitimately include observations from before their target period. Normalization statistics for learned models are calculated from training inputs only.
+
+These maps are a compact example of **spatiotemporal prediction**: the model receives an evolving field and must estimate future fields, rather than assigning a label to a single image. The same modeling questions about temporal context, spatial structure, held-out periods, and useful baselines arise in other environmental sensing problems.
 
 ## Start here
 
-The idea is to give the model 14 consecutive daily temperature maps and ask for the next 3. For example, maps from days 1–14 go in, and predictions for days 15–17 come out. A map is a grid of temperatures over the same area, so each prediction has a temperature for every grid cell.
+Use **Python 3.12** and run commands from the repository root. Put these three instructor-provided files directly in `data/`:
 
-A few terms used throughout the code:
+| File | Arrays | Purpose |
+| --- | --- | --- |
+| `data/train.npz` | `X`, `y`, `dates`, `lat`, `lon`, `mask` | Fit models |
+| `data/validation.npz` | Same fields | Compare runs and choose a checkpoint |
+| `data/test_inputs.npz` | `X`, `dates`, `lat`, `lon`, `mask` | Make Kaggle predictions; no targets |
 
-- **Sample / example:** one 14-day input window and its 3-day forecast window.
-- **Inputs (`X`):** the maps the model gets to see.
-- **Targets (`y`):** the observed maps we compare its predictions with.
-- **Training set:** examples used to fit a model's weights, or the numbers it learns.
-- **Validation set:** examples with known targets used to compare models and choose which saved model to keep. These targets do not update the weights.
-- **Test set:** inputs with targets withheld, used to make the submission.
+**One sample** is a 14-day input window and its 3-day target window. Training examples update learned weights; validation targets are used for model comparison and checkpoint selection; hidden test targets are used for competition scoring. Land cells are excluded from the metric implemented in `src/evaluate.py`.
 
-My starting point is persistence: copy the most recent map for all three forecast days. That gives me something simple to compare everything else against. A training run finishing successfully means the code worked; a lower validation error than persistence means it did better on this validation set.
+Colab or a local computer is enough for the baseline and small models; HPC is optional. In Colab, use a Python 3.12 runtime, open `notebooks/competition_quickstart.ipynb`, set `REPO_DIR`, and run the cells in order.
 
-More detailed notes:
-
-- [Data notes](docs/data.md): what the arrays contain, how to read their indices, and how masks and submission IDs work.
-- [Workflow notes](docs/walkthrough.md): how the files connect, what each command saves, and how to read the scores.
-- [Comparing models](docs/comparing-models.md): what makes a comparison useful and what the current results can tell us.
-
-Uses Python 3.12. Run commands from the repository root (the folder containing this README).
-
-## Data files
-
-The data:
-
-- `data/train.npz`: `X`, `y`, `dates`, `lat`, `lon`, and `mask`
-- `data/validation.npz`: the same fields
-- `data/test_inputs.npz`: `X`, `dates`, `lat`, `lon`, and `mask`, with no targets
-
-`X` has shape `(examples, 14, latitude, longitude)`. `y` has shape `(examples, 3, latitude, longitude)`. `mask` identifies ocean cells.
-
-Place the three `.npz` files directly inside this repository's `data/` folder.
-
-## Choose a working environment
-
-Colab or a local computer is sufficient for the baseline and smaller models. HPC is optional.
-
-For Colab, use a Python 3.12 runtime to match the pinned dependencies. Open `notebooks/competition_quickstart.ipynb`, set `REPO_DIR`, and run the cells in order.
-
-For a local environment on macOS or Linux:
+For macOS or Linux:
 
 ```bash
 python3.12 -m venv .venv
@@ -53,33 +54,55 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-On Windows, create the environment with `py -3.12 -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1`. After activation, use `python` for the commands below.
+On Windows, run `py -3.12 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then install with `python -m pip install -r requirements.txt`. The commands below use `python` after activation.
 
-## Check the setup
+Check the data and basic workflow:
 
 ```bash
-python scripts/check_data.py # check the data files
-python -m unittest discover -s tests # quick unit tests
-python -m src.train --config configs/baseline.yaml # run baseline model
+python scripts/check_data.py
+python -m unittest discover -s tests
+python -m src.train --config configs/baseline.yaml
 ```
 
-The baseline repeats the most recent input map for all three forecast days. It writes its score to `outputs/baseline/metrics.json`.
+The test command runs the tests available in this checkout. Additional local tests are Git-ignored, so a fresh clone currently includes only `tests/test_dataset.py`.
 
-These checks tell me the basic local workflow runs. They do not tell me whether a learned model beats persistence.
+The baseline repeats the last observed map and writes its validation score to `outputs/baseline/metrics.json`. Passing the setup checks means the pipeline runs; it does not mean a learned model has beaten persistence.
 
-Generate the baseline submission files:
+Create a baseline Kaggle submission:
 
 ```bash
 python -m src.predict --input data/test_inputs.npz --output outputs/test_predictions.npz
 python submission/make_submission.py --predictions outputs/test_predictions.npz --output outputs/submission.csv
 ```
 
-## First learned model
+Submission rows preserve input-example order, then lead day (1–3), latitude index, and longitude index. See [data notes](docs/data.md) for indices, masks, and submission IDs, and the [workflow walkthrough](docs/walkthrough.md) for files, commands, and saved results.
 
-The small CNN treats the 14 input days as channels and predicts a correction to persistence. I keep it small because the grid is small. This is the first example of fitting weights, checking validation, and saving a model.
+## Released model examples
+
+The reference examples below are available **after their corresponding student checkpoint**. Use the same prepared splits and metric when comparing them, and record the configuration, validation score, Kaggle submission, and what you learned. A model may be a sound experiment even when it does not beat persistence.
+
+| Model | What it adds | Key limitation in this implementation | Config |
+| --- | --- | --- | --- |
+| Persistence | A no-training benchmark | Assumes no change over the forecast horizon | `configs/baseline.yaml` |
+| Small CNN | Learns local spatial corrections to persistence | Treats the 14 input days as channels | `configs/small_cnn.yaml` |
+| RNN | Processes the 14 days in order | Flattens each map before the recurrent layer | `configs/rnn.yaml` |
+| LSTM | Carries a hidden state and cell state through the sequence | Also flattens each map | `configs/lstm.yaml` |
+
+Train a released learned model by choosing its config:
 
 ```bash
 python -m src.train --config configs/small_cnn.yaml
+python -m src.train --config configs/rnn.yaml
+python -m src.train --config configs/lstm.yaml
+```
+
+Each command **starts from scratch**. The included learned-model configs currently use 10 epochs and the same starting training settings. `hidden_channels` controls CNN width; in the RNN and LSTM configs, it sets the recurrent `hidden_size`. The recurrent examples use the fixed **12 × 14** grid. For a one-epoch smoke check, copy a config, set `epochs: 1`, and choose a new `output_dir`.
+
+Learned runs save `history.json` after each epoch, `metrics.json` with the best validation score and epoch, `config.yaml`, and `best_model.pt` in their output folder. The training script minimizes pooled ocean-cell MSE. Its logged training RMSE therefore differs from the validation score, which computes RMSE separately for each forecast day and then averages the three. Both scores are in °C; compare **validation RMSE** with `outputs/baseline/metrics.json`.
+
+For example, create a submission from the CNN checkpoint:
+
+```bash
 python -m src.predict \
   --input data/test_inputs.npz \
   --checkpoint outputs/small_cnn/best_model.pt \
@@ -89,70 +112,31 @@ python submission/make_submission.py \
   --output outputs/small_cnn_submission.csv
 ```
 
-The training script calculates normalization statistics from training inputs only, reports validation RMSE after each epoch, and saves the best checkpoint. The repository metric ignores masked land cells: it pools squared errors across examples and ocean cells separately for each lead day, takes three square roots, then averages them. Training minimizes pooled ocean-cell MSE; the logged training RMSE therefore differs from the validation metric. Scores are in degrees Celsius (lower is better).
-
-Prediction without `--checkpoint` always uses persistence. A checkpoint supplies the model architecture, weights, and training normalization. `--device auto` uses CUDA when available and otherwise CPU.
-
-Submission rows preserve input example order, then lead day (1–3), latitude index, and longitude index.
-
-## First RNN run
-
-The RNN reads the 14 days in order, using one flattened map per day. Like the CNN, it predicts corrections to the last observed map. The current model uses our fixed 12 × 14 grid.
-
-```bash
-python -m src.train --config configs/rnn.yaml
-```
-
-For a quick setup check, use one epoch in a copied config with its own output folder. `hidden_channels` is the config name we already use; for the RNN it sets `hidden_size`, the number of values in the learned summary. The included RNN, LSTM, and CNN configs use the same training settings to give us a starting comparison.
-
-Results go into `outputs/rnn/`: `history.json` records each epoch, `metrics.json` reports the best validation score, and `best_model.pt` holds the model for prediction. Compare validation RMSE with `outputs/baseline/metrics.json`; lower is better. Check `epochs` in the config before running; the included learned-model configs currently use 10.
-
-Each training command starts a new model from scratch; it does not continue a previous checkpoint. Copy the config and change `output_dir` for a separate experiment, or use `--track` to get a unique run folder.
-
-## LSTM runs
-
-`python -m src.train --config configs/lstm.yaml` trains the LSTM and saves to `outputs/lstm/`. For a quick setup check, copy the config, set `epochs` to 1, and choose a different output folder.
-
-The LSTM carries both a hidden state and a cell state through the 14 days. Like the RNN, it uses the final hidden state to predict three corrections to persistence. It uses the same fixed grid and `hidden_channels` config setting.
-
-New training runs also save `config.yaml` beside their results, and learned models record the best epoch in `metrics.json`. History is saved after each epoch. Reusing an output folder still overwrites results, so use a new folder for each experiment.
+Without `--checkpoint`, `src.predict` uses persistence. A checkpoint includes the model type and settings, weights, and training normalization; `src/model.py` rebuilds the architecture when loading it. `--device auto` uses CUDA if available and otherwise uses the CPU. Reusing an output folder overwrites results: copy the config and change `output_dir` for a separate experiment, or use `--track` for a unique run folder. The [model comparison notes](docs/comparing-models.md) explain what a score difference can and cannot tell us.
 
 ## Optional experiment tracking
 
-Add `--track` to a training command to save settings, learning curves, and checkpoints in local MLflow. Each tracked run gets a separate output subfolder.
+MLflow is optional. With `--track`, each run gets its own output subfolder and a local record of settings, learning curves, and checkpoints. For prediction, use the checkpoint inside the printed run folder, such as `outputs/lstm/<run-id>/best_model.pt`, rather than the untracked path above.
 
 ```bash
 python -m pip install -r requirements-tracking.txt
 python -m src.train --config configs/lstm.yaml --track
-.venv/bin/python -m mlflow server --backend-store-uri sqlite:///outputs/mlflow/mlflow.db --host 127.0.0.1 --port 5001
+python -m mlflow server --backend-store-uri sqlite:///outputs/mlflow/mlflow.db --host 127.0.0.1 --port 5001
 ```
 
-The server command above uses the macOS/Linux environment path. On Windows, use `.venv\Scripts\python.exe -m mlflow server` with the same arguments.
-
-Open http://127.0.0.1:5001 and select **ocean-sst**. [Experiment tracking notes](docs/experiments.md) explain what gets saved and how to compare runs.
+Open [http://127.0.0.1:5001](http://127.0.0.1:5001) and select **ocean-sst**. On Windows, run the same `python -m mlflow server` command in the activated environment. See [experiment tracking notes](docs/experiments.md).
 
 ## Project map
 
-- `src/dataset.py`: validates and loads prepared arrays
-- `src/model.py`: models
-- `src/evaluate.py`: masked RMSE used to compare models
-- `src/train.py`: baseline evaluation and learned-model training
-- `src/predict.py`: persistence or checkpoint-based test predictions
-- `src/tracking.py`: optional MLflow run records
-- `configs/`: experiment settings
-- `notebooks/competition_quickstart.ipynb`: Colab setup path
-- `submission/make_submission.py`: prediction-to-CSV conversion
-- `scripts/check_data.py`: checks the supplied files and shared grid
-- `tests/`: small checks for loading, scoring, models, and the submission workflow
-- `docs/`: data and workflow notes
+| Path | Purpose |
+| --- | --- |
+| `src/dataset.py`, `scripts/check_data.py` | Load and validate prepared arrays and the shared grid |
+| `src/model.py` | Released reference model implementations |
+| `src/evaluate.py` | Masked ocean-cell RMSE |
+| `src/train.py`, `src/predict.py` | Baseline/learned training and test predictions |
+| `src/tracking.py`, `configs/` | Optional run tracking and reproducible settings |
+| `notebooks/competition_quickstart.ipynb` | Colab path |
+| `submission/make_submission.py` | Convert predictions to Kaggle CSV |
+| `tests/`, `docs/` | Checks and detailed notes |
 
-## Automatic tuning with Optuna (forthcoming lesson; ignore for now, 09/29)
-
-Optuna tries learning rates and hidden sizes using the same training loop. Start with a small search:
-
-```bash
-python -m pip install -r requirements-tuning.txt
-python -m src.tune --config configs/lstm.yaml --trials 10 --epochs 10 --study-dir outputs/tuning/lstm --track
-```
-
-Each trial gets its own output folder and, with `--track`, an MLflow run. The study saves `best_config.yaml` and `best_trial.json`. Repeating the command adds 10 more trials to the saved study. [Tuning notes](docs/tuning.md) explain the search settings, results, and resuming.
+The data files, generated outputs, and private test targets do not belong in Git. Additional lessons and example code are released as the class progresses.
