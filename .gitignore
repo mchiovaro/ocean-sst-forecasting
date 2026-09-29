@@ -43,6 +43,6 @@ Thumbs.db
 .idea/
 
 # Tuning things
-src/tune.py
 docs/tuning.md
-requirements-tune.txt
+src/tune.py
+requirements-tuning.txt
