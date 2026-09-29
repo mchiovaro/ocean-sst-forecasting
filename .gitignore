@@ -8,7 +8,8 @@ packaged_data/
 # Kaggle competition files
 kaggle_host_files/
 submission/prepare_kaggle_host_files.py
-tests/test_workflow.py
+tests/
+!tests/test_dataset.py
 
 # Model outputs and submissions
 outputs/
@@ -40,3 +41,8 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Tuning things
+src/tune.py
+docs/tuning.md
+requirements-tune.txt
