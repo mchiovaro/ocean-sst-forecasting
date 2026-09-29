@@ -42,5 +42,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Documentation
+# Tuning things
 docs/tuning.md
+src/tune.py
