@@ -41,3 +41,6 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Documentation
+docs/tuning.md
