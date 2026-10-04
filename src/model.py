@@ -3,6 +3,7 @@
 from __future__ import annotations
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 class PersistenceModel(nn.Module):
@@ -177,11 +178,147 @@ class LSTMModel(nn.Module):
         return x[:, -1:, :, :] + correction
 
 
-def build_model(
-    model_type: str, *, hidden_channels=32, input_mean=0.0, input_std=1.0
-) -> nn.Module:
-    """Build persistence, small_cnn, rnn, or lstm from the config settings.
+class CausalConv1d(nn.Module):
+    """Convolve over time using only the current position and earlier ones."""
 
+    def __init__(self, in_channels, out_channels, kernel_size, dilation):
+        super().__init__()
+        # Dilation spaces out the days the filter reads. Pad the start with zeros
+        # so the output still has the same number of days.
+        self.left_padding = dilation * (kernel_size - 1)
+        self.conv = nn.Conv1d(
+            in_channels, out_channels, kernel_size, dilation=dilation, padding=0
+        )
+
+    def forward(self, x):
+        """Take (batch, channels, time) and keep the same number of time positions."""
+        # The pair means (left, right) padding on the time dimension.
+        # Only pad the left so each position reads the current day and earlier days.
+        x = F.pad(x, (self.left_padding, 0))
+        return self.conv(x)
+
+
+class TemporalBlock(nn.Module):
+    """Causal convolution(s), plus a shortcut around them."""
+
+    def __init__(self, in_channels, out_channels, kernel_size, dilation, dropout):
+        super().__init__()
+        self.main_path = nn.Sequential(
+            # one single round of processing; can repeat these three over
+            CausalConv1d(in_channels, out_channels, kernel_size, dilation),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            #CausalConv1d(in_channels, out_channels, kernel_size, dilation),
+            #nn.ReLU(),
+            #nn.Dropout(dropout),
+        )
+        # The shortcut and main path must have the same shape before we add them.
+        # A 1x1 convolution changes channels at each day without mixing days.
+        self.shortcut = (
+            nn.Identity() if in_channels == out_channels
+            else nn.Conv1d(in_channels, out_channels, kernel_size=1)
+        )
+
+    def forward(self, x):
+        """Add the learned changes to the shortcut, then apply ReLU."""
+        main_path = self.main_path(x)
+        residual = self.shortcut(x)
+        return F.relu(main_path + residual)
+
+
+class TCNModel(nn.Module):
+    """Use temporal convolutions to learn corrections to the last observed map.
+
+    Each grid cell becomes an input channel. This keeps its values, but does
+    not explicitly tell the model which cells are spatial neighbors.
+    """
+
+    def __init__(
+        self,
+        grid_shape: tuple[int, int],
+        hidden_channels: int = 32,
+        forecast_days: int = 3,
+        kernel_size: int = 3,
+        dilations: tuple[int, ...] = (1, 2, 4),
+        dropout: float = 0.1,
+        input_mean: float = 0.0,
+        input_std: float = 1.0,
+    ):
+        super().__init__()
+        # Check the settings before building the layers so shape errors are easier to find.
+        sizes = (*grid_shape, hidden_channels, forecast_days, kernel_size, *dilations)
+        if len(grid_shape) != 2 or not dilations:
+            raise ValueError("Use a two-dimensional grid and at least one dilation")
+        if any(
+            not isinstance(size, int) or isinstance(size, bool) or size <= 0
+            for size in sizes
+        ):
+            raise ValueError(
+                "Grid sizes, channels, days, kernel size, and dilations must be positive integers"
+            )
+        if not 0 <= dropout < 1:
+            raise ValueError("dropout must be between 0 (included) and 1 (excluded)")
+        if (
+            not torch.isfinite(torch.tensor([input_mean, input_std])).all()
+            or input_std <= 0
+        ):
+            raise ValueError(
+                "Normalization must be finite and input_std must be positive"
+            )
+        self.grid_shape = tuple(grid_shape)
+        self.forecast_days = forecast_days
+        self.hidden_channels = hidden_channels
+        self.kernel_size = kernel_size
+        self.dilations = tuple(dilations)
+        # Keep the training normalization with the weights, just like the other models
+        self.register_buffer("input_mean", torch.tensor(float(input_mean)))
+        self.register_buffer("input_std", torch.tensor(float(input_std)))
+
+        cells_per_map = self.grid_shape[0] * self.grid_shape[1]  # 12 * 14 = 168
+        blocks = []
+        in_channels = cells_per_map
+        for dilation in self.dilations:
+            blocks.append(
+                TemporalBlock(
+                    in_channels, hidden_channels, kernel_size, dilation, dropout
+                )
+            )
+            # For our grid, the first block reads 168 cells. Later blocks read learned features.
+            in_channels = hidden_channels
+        self.network = nn.Sequential(*blocks)
+        self.readout = nn.Linear(hidden_channels, forecast_days * cells_per_map)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Turn (batch, 14, H, W) into (batch, forecast_days, H, W), in Celsius."""
+        if x.ndim != 4 or x.shape[1] != 14:
+            raise ValueError("Expected x with shape (batch, 14, latitude, longitude)")
+        if tuple(x.shape[-2:]) != self.grid_shape:
+            raise ValueError(f"Expected grid shape {self.grid_shape}")
+        normalized = (x - self.input_mean) / self.input_std
+
+        # tcn additions
+        sequence = normalized.flatten(start_dim=2)  # (batch, 14, 168)
+        # Conv1d expects channels before time, unlike our RNN input, so we transpose.
+        sequence = sequence.transpose(1, 2)  # (batch, 168, 14)
+        features = self.network(sequence)  # (batch, hidden_channels, 14)
+
+        summary = features[:, :, -1]  # last position can use the full input history
+        correction = self.readout(summary).reshape(
+            x.shape[0], self.forecast_days, *self.grid_shape
+        )
+        # This is a temperature difference so we multiply by std
+        correction = correction * self.input_std
+        persistence = x[:, -1:, :, :].repeat(1, self.forecast_days, 1, 1)
+        return persistence + correction
+
+
+def build_model(
+    model_type: str, *, hidden_channels=32, input_mean=0.0, input_std=1.0,
+    kernel_size=3, dilations=(1, 2, 4), dropout=0.1,
+) -> nn.Module:
+    """Build persistence, small_cnn, rnn, lstm, or tcn from the config settings.
+
+    kernel_size, dilations, and dropout are settings for only the TCN.
     All predict three days. Learned weights must be trained or loaded separately;
     creating the model alone does not restore a checkpoint.
     """
@@ -203,6 +340,17 @@ def build_model(
         return LSTMModel(
             grid_shape=(12, 14),
             hidden_size=hidden_channels,
+            input_mean=input_mean,
+            input_std=input_std,
+        )
+    if model_type == "tcn":
+        # use the saved config settings to rebuild the same model for prediction.
+        return TCNModel(
+            grid_shape=(12, 14),
+            hidden_channels=hidden_channels,
+            kernel_size=kernel_size,
+            dilations=tuple(dilations),
+            dropout=dropout,
             input_mean=input_mean,
             input_std=input_std,
         )
