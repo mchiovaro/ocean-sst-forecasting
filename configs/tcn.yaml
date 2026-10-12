@@ -1,0 +1,17 @@
+data:
+  train_file: data/train.npz
+  validation_file: data/validation.npz
+model:
+  type: tcn
+  hidden_channels: 32 # features learned by each temporal block
+  kernel_size: 3 # number of positions each filter reads
+  dilations: [1, 2, 4] # spacing between positions, one value per block
+  dropout: 0.1 # fraction of features randomly set to zero during training
+output_dir: outputs/tcn
+batch_size: 64 
+epochs: 10
+learning_rate: 0.001
+weight_decay: 0.00001
+num_workers: 0
+device: auto
+seed: 444

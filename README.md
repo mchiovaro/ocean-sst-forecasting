@@ -91,6 +91,7 @@ The reference examples below are available **after their corresponding student c
 | Small CNN | Learns local spatial corrections to persistence | Treats the 14 input days as channels | `configs/small_cnn.yaml` |
 | RNN | Processes the 14 days in order | Flattens each map before the recurrent layer | `configs/rnn.yaml` |
 | LSTM | Carries a hidden state and cell state through the sequence | Also flattens each map | `configs/lstm.yaml` |
+| TCN | Uses causal, dilated convolutions along time | Also flattens each map | `configs/tcn.yaml` |
 
 Train a released learned model by choosing its config:
 
@@ -98,6 +99,7 @@ Train a released learned model by choosing its config:
 python -m src.train --config configs/small_cnn.yaml
 python -m src.train --config configs/rnn.yaml
 python -m src.train --config configs/lstm.yaml
+python -m src.train --config configs/tcn.yaml
 ```
 
 Each command **starts from scratch**. The included learned-model configs currently use 10 epochs and the same starting training settings. `hidden_channels` controls CNN width; in the RNN and LSTM configs, it sets the recurrent `hidden_size`. The recurrent examples use the fixed **12 × 14** grid. For a one-epoch smoke check, copy a config, set `epochs: 1`, and choose a new `output_dir`.
@@ -117,6 +119,8 @@ python submission/make_submission.py \
 ```
 
 Without `--checkpoint`, `src.predict` uses persistence. A checkpoint includes the model type and settings, weights, and training normalization; `src/model.py` rebuilds the architecture when loading it. `--device auto` uses CUDA if available and otherwise uses the CPU. Reusing an output folder overwrites results: copy the config and change `output_dir` for a separate experiment, or use `--track` for a unique run folder. The [model comparison notes](docs/comparing-models.md) explain what a score difference can and cannot tell us.
+
+The [TCN notes](docs/tcn.md) walk through left padding, temporal blocks, the tensor shapes, and the receptive field.
 
 ## Optional experiment tracking
 

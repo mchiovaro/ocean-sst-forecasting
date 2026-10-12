@@ -42,9 +42,18 @@ def main():
         checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
         model_type = checkpoint["model_type"]
         model_cfg = checkpoint.get("model_config", {})
+        tcn_settings = {} # dict to hold new settings
+        if model_type == "tcn":
+            # read the settings saved during training so we rebuild the same TCN.
+            tcn_settings = {
+                "kernel_size": model_cfg["kernel_size"],
+                "dilations": model_cfg["dilations"],
+                "dropout": model_cfg["dropout"],
+            }
         model = build_model(
             model_type,
             hidden_channels=int(model_cfg.get("hidden_channels", 32)),
+            **tcn_settings, # pass these settings to build_model
             input_mean=float(checkpoint["input_mean"]),
             input_std=float(checkpoint["input_std"]),
         )
