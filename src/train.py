@@ -54,6 +54,14 @@ def train(config, output_dir, tracker=None):
     torch.manual_seed(seed)
     model_cfg = config["model"]
     model_type = model_cfg["type"]
+    tcn_settings = {} # dict to hold new settings
+    if model_type == "tcn":
+        # These settings must be in the TCN config. Other models don't need them.
+        tcn_settings = {
+            "kernel_size": model_cfg["kernel_size"], 
+            "dilations": model_cfg["dilations"], 
+            "dropout": model_cfg["dropout"],
+        }
     batch_size = int(config.get("batch_size", 64))
     device = choose_device(config.get("device", "auto"))
     validation = SSTDataset(config["data"]["validation_file"])
@@ -77,6 +85,7 @@ def train(config, output_dir, tracker=None):
                 weight_decay=float(config.get("weight_decay", 0.0)),
                 num_workers=int(config.get("num_workers", 0)),
             )
+        params.update(tcn_settings) # track the new TCN settings
         tracker.log_params(params)
     # Keep the settings with the results, even if we edit the original YAML later.
     (output_dir / "config.yaml").write_text(
@@ -103,6 +112,7 @@ def train(config, output_dir, tracker=None):
         model = build_model(
             model_type,
             hidden_channels=int(model_cfg.get("hidden_channels", 32)),
+            **tcn_settings, # pass these settings to build_model
             input_mean=mean,
             input_std=std,
         ).to(device)
